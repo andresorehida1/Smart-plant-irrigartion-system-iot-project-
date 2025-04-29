@@ -1,0 +1,4 @@
+telepot
+requests
+matplotlib
+websockets

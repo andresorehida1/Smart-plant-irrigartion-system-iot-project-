@@ -1,0 +1,271 @@
+version: "3.8"
+
+services:
+  backend:
+    build: ./Catalog
+    container_name: smartplant_backend
+    ports:
+      - "8080:8080"
+      - "8765:8765"
+    environment:
+      - MQTT_HOST=mqtt_broker
+      - MQTT_PORT=1883
+      - INFLUXDB_URL=http://influxdb:8086
+      - REST_URL=http://backend:8080
+    depends_on:
+      - mqtt_broker
+      - influxdb
+    networks:
+      - iot_net
+
+  influxdb:
+    image: influxdb:1.8
+    container_name: smartplant_influxdb
+    ports:
+      - "8086:8086"
+    volumes:
+      - ./influxdb-init:/docker-entrypoint-initdb.d
+      - influxdb_data:/var/lib/influxdb
+    networks:
+      - iot_net
+
+  mqtt_broker:
+    image: eclipse-mosquitto:2.0
+    container_name: smartplant_mosquitto
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./config/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-h", "localhost", "-t", "healthcheck", "-C", "1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - iot_net
+
+  historical_analysis:
+    build: ./HistoricalAnalysis
+    container_name: historical_analysis
+    environment:
+      - BACKEND_URL=http://backend:8080
+      - HIST_WINDOW=1h
+      - HIST_INTERVAL_SEC=60
+      - HIST_MIN_POINTS=5
+      - HIST_NUM_CLUSTERS=3
+      - HIST_BUFFER_FACTOR=0.2
+    depends_on:
+      - backend
+      - influxdb
+    networks:
+      - iot_net
+
+  irrigation_control:
+    build: ./IrrigationControl
+    container_name: irrigation_control
+    environment:
+      - CATALOG_URL=http://backend:8080/getCatalog
+      - ALERTS_URL=http://backend:8080/alerts
+      - IRR_EVAL_INTERVAL_SEC=60
+      - IRR_SCHEDULED_TIMES=06:00,14:00,18:00
+      - IRR_BASE_PERCENTAGE=20
+      - IRR_PUMP_FLOW_LPS=0.5
+      - IRR_TANK_CAPACITY_L=10.0
+      - IRR_DEFICIT_FACTOR=0.5
+      - MQTT_HOST=mqtt_broker
+      - MQTT_PORT=1883
+    depends_on:
+      - backend
+      - influxdb
+      - mqtt_broker
+    networks:
+      - iot_net
+
+  realtime_analysis:
+    build: ./RealtimeAnalysis
+    container_name: realtime_analysis
+    environment:
+      - BACKEND_URL=http://backend:8080
+    depends_on:
+      - backend
+      - influxdb
+    networks:
+      - iot_net
+
+  telegram_bot:
+    build: ./TelegramBot
+    container_name: telegram_bot
+    environment:
+      - BACKEND_URL=http://backend:8080
+      - WS_URL=ws://backend:8765
+    depends_on:
+      - backend
+    networks:
+      - iot_net
+
+  influxdb_adaptor:
+    build: ./InfluxdbAdaptor
+    container_name: influxdb_adaptor
+    environment:
+      - BACKEND_URL=http://backend:8080
+      - MQTT_HOST=mqtt_broker
+      - MQTT_PORT=1883
+      - INFLUXDB_URL=http://influxdb:8086
+    depends_on:
+      - backend
+      - mqtt_broker
+      - influxdb
+    networks:
+      - iot_net
+
+  # Simulator services with full ENV variables and DNS aliases
+  simulator_spring_europe:
+    build: ./Simulator
+    container_name: sim_spring_eu
+    environment:
+      - PLANT_SERIAL=123456
+      - INTERVAL=1
+      - TEMP_BASE=15.0
+      - TEMP_DAY_AMPL=8.0
+      - TEMP_NOISE_STD=0.5
+      - TEMP_MIN_HOUR=4.0
+      - TEMP_PEAK_HOUR=15.0
+      - HUM_BASE=65.0
+      - HUM_DAY_AMPL=20.0
+      - HUM_NOISE_STD=2.0
+      - SOIL_PLANT_TYPE=spider plant
+      - SOIL_NOISE_LEVEL=0.3
+      - PH_PLANT_TYPE=spider plant
+      - PH_FLUCT_STD=0.03
+      - PUMP_FLOW_RATE=0.1
+      - TANK_CAPACITY=5.0
+      - TANK_AUTO_REFILL=True
+      - TANK_LOW_THRESHOLD=30
+    networks:
+      iot_net:
+        aliases:
+          - "123456.local"
+          - "123456"
+
+  simulator_desert_summer:
+    build: ./Simulator
+    container_name: sim_desert_summer
+    environment:
+      - PLANT_SERIAL=654321
+      - INTERVAL=1
+      - TEMP_BASE=30.0
+      - TEMP_DAY_AMPL=12.0
+      - TEMP_NOISE_STD=1.0
+      - TEMP_MIN_HOUR=5.0
+      - TEMP_PEAK_HOUR=16.0
+      - HUM_BASE=20.0
+      - HUM_DAY_AMPL=5.0
+      - HUM_NOISE_STD=1.5
+      - SOIL_PLANT_TYPE=cactus
+      - SOIL_NOISE_LEVEL=0.2
+      - PH_PLANT_TYPE=cactus
+      - PH_FLUCT_STD=0.02
+      - PUMP_FLOW_RATE=0.05
+      - TANK_CAPACITY=2.0
+      - TANK_AUTO_REFILL=False
+      - TANK_LOW_THRESHOLD=15
+    networks:
+      iot_net:
+        aliases:
+          - "654321.local"
+          - "654321"
+
+  simulator_rainforest_autumn:
+    build: ./Simulator
+    container_name: sim_rain_autumn
+    environment:
+      - PLANT_SERIAL=456789
+      - INTERVAL=1
+      - TEMP_BASE=25.0
+      - TEMP_DAY_AMPL=5.0
+      - TEMP_NOISE_STD=0.7
+      - TEMP_MIN_HOUR=6.0
+      - TEMP_PEAK_HOUR=14.0
+      - HUM_BASE=85.0
+      - HUM_DAY_AMPL=10.0
+      - HUM_NOISE_STD=3.0
+      - SOIL_PLANT_TYPE=peace lily
+      - SOIL_NOISE_LEVEL=0.4
+      - PH_PLANT_TYPE=peace lily
+      - PH_FLUCT_STD=0.05
+      - PUMP_FLOW_RATE=0.2
+      - TANK_CAPACITY=7.0
+      - TANK_AUTO_REFILL=True
+      - TANK_LOW_THRESHOLD=25
+    networks:
+      iot_net:
+        aliases:
+          - "456789.local"
+          - "456789"
+
+  simulator_mountain_winter:
+    build: ./Simulator
+    container_name: sim_mountain_winter
+    environment:
+      - PLANT_SERIAL=987321
+      - INTERVAL=1
+      - TEMP_BASE=5.0
+      - TEMP_DAY_AMPL=10.0
+      - TEMP_NOISE_STD=1.5
+      - TEMP_MIN_HOUR=2.0
+      - TEMP_PEAK_HOUR=13.0
+      - HUM_BASE=50.0
+      - HUM_DAY_AMPL=15.0
+      - HUM_NOISE_STD=2.5
+      - SOIL_PLANT_TYPE=peace lily
+      - SOIL_NOISE_LEVEL=0.3
+      - PH_PLANT_TYPE=peace lily
+      - PH_FLUCT_STD=0.04
+      - PUMP_FLOW_RATE=0.1
+      - TANK_CAPACITY=6.0
+      - TANK_AUTO_REFILL=True
+      - TANK_LOW_THRESHOLD=20
+    networks:
+      iot_net:
+        aliases:
+          - "987321.local"
+          - "987321"
+
+  simulator_tropical:
+    build: ./Simulator
+    container_name: sim_tropical
+    environment:
+      - PLANT_SERIAL=123789
+      - INTERVAL=1
+      - TEMP_BASE=28.0
+      - TEMP_DAY_AMPL=4.0
+      - TEMP_NOISE_STD=0.6
+      - TEMP_MIN_HOUR=5.0
+      - TEMP_PEAK_HOUR=14.0
+      - HUM_BASE=90.0
+      - HUM_DAY_AMPL=5.0
+      - HUM_NOISE_STD=2.0
+      - SOIL_PLANT_TYPE=spider plant
+      - SOIL_NOISE_LEVEL=0.5
+      - PH_PLANT_TYPE=spider plant
+      - PH_FLUCT_STD=0.04
+      - PUMP_FLOW_RATE=0.15
+      - TANK_CAPACITY=8.0
+      - TANK_AUTO_REFILL=True
+      - TANK_LOW_THRESHOLD=35
+    networks:
+      iot_net:
+        aliases:
+          - "123789.local"
+          - "123789"
+
+volumes:
+  influxdb_data:
+  mosquitto_data:
+  mosquitto_log:
+
+networks:
+  iot_net:
+    driver: bridge

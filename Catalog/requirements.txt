@@ -1,0 +1,5 @@
+cherrypy
+influxdb
+requests
+websockets
+paho-mqtt

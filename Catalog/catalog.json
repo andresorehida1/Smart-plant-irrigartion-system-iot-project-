@@ -1,0 +1,40 @@
+{
+    "projectOwner": "Team1",
+    "projectName": "MySmartPlant",
+    "catalogUrl": "http://smartplant_backend:8080",
+    "lastUpdate": "2025-04-28",
+    "broker": {
+        "IP": "192.168.1.9",
+        "port": 1883
+    },
+    "userList": [],
+    "influxdb": {
+        "url": "http://influxdb:8086",
+        "sensorDataBaseName": "plants_measurements",
+        "microServicesDataBaseName": "analysis_data",
+        "notificationsDataBase": "user_notifications"
+    },
+    "influxdbAdaptor": {"url":"http://influxdb_adaptor:8081", "updateEndpoint":"/refresh"},
+    "microServices": [
+        {
+            "name": "realTimeAnalysis",
+            "availableServices": [
+                "REST"
+            ]
+        },
+        {
+            "name": "historicalAnalysis",
+            "availableServices": [
+                "REST"
+            ]
+        },
+        {
+            "name": "irrigationControl",
+            "availableServices": [
+                "REST",
+                "MQTT"
+            ],
+            "url": "http://irrigation_control:8083"
+        }
+    ]
+}
