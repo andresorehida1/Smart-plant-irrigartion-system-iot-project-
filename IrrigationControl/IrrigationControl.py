@@ -10,7 +10,6 @@ import cherrypy
 from cherrypy import tools, dispatch, engine, config, tree
 from datetime import datetime, timedelta, timezone, date
 
-# Configuración desde entorno
 CATALOG_URL       = os.getenv("CATALOG_URL", "http://0.0.0.0:8080/getCatalog").rstrip('/')
 IRR_EVAL_INTERVAL = int(os.getenv("IRR_EVAL_INTERVAL_SEC", "60"))
 SIM_INTERVAL_SEC  = float(os.getenv("SIM_INTERVAL_SEC", "1"))    # segundos reales por minuto simulado
@@ -20,7 +19,6 @@ PUMP_FLOW_LPS     = float(os.getenv("IRR_PUMP_FLOW_LPS", "0.5"))
 TANK_CAPACITY_L   = float(os.getenv("IRR_TANK_CAPACITY_L", "10.0"))
 DEFICIT_FACTOR    = float(os.getenv("IRR_DEFICIT_FACTOR", "0.5"))
 
-# Rangos óptimos y frecuencias para scheduled
 OPTIMAL_RANGES = {
     "cactus":       (10, 30),
     "spider plant": (40, 60),
@@ -32,7 +30,6 @@ SCHEDULED_FREQUENCIES = {
     "peace lily":   3
 }
 
-# Logger
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -130,9 +127,6 @@ class IrrigationController:
                     self._trigger_irrigation(serial, pct)
 
     def _scheduled_cycle(self, event_idx):
-        """
-        Trigger scheduled irrigation based on event index (order of times in SCHEDULED_TIMES).
-        """
         self._load_catalog()
         for serial, info in self.plants.items():
             if info['mode'] != 'scheduled':
@@ -142,7 +136,6 @@ class IrrigationController:
                 pct = BASE_PERCENT
                 logger.info(f"⏰ Scheduled irrigation {serial} (event {event_idx+1}/{freq}): pct={pct:.1f}%")
                 self._trigger_irrigation(serial, pct)
-        # Reschedule this event for next day simulated
         next_run = datetime.now() + timedelta(seconds=1440 * self.sim_interval)
         job_id = f"scheduled_{event_idx}"
         try:
